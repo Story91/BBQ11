@@ -18,6 +18,10 @@ import {
   Plus,
   Info
 } from "lucide-react";
+import AnimatedTile from "./animations/AnimatedTile";
+import SplitText from "./animations/SplitText";
+import LoadingAnimation from "./animations/LoadingAnimation";
+import AnimatedButton, { RippleButton } from "./animations/AnimatedButton";
 
 interface Tile {
   id: string;
@@ -378,23 +382,41 @@ export default function WorldBuilder() {
 
   if (!account.address) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 bg-card/50 backdrop-blur-sm rounded-lg border border-white/10 p-8">
         <Map className="w-16 h-16 text-muted-foreground" />
-        <h2 className="text-2xl font-bold">Welcome to World Builder</h2>
-        <p className="text-muted-foreground text-center max-w-md">
-          Connect your wallet to start building your virtual world. 
-          Buy land, construct buildings, and earn income from tourists!
-        </p>
+        <SplitText 
+          text="Welcome to World Builder" 
+          animationType="fadeUp"
+          className="text-2xl font-bold text-center"
+          delay={0.3}
+        />
+        <SplitText 
+          text="Connect your wallet to start building your virtual world. Buy land, construct buildings, and earn income from tourists!" 
+          animationType="fadeUp"
+          className="text-muted-foreground text-center max-w-md"
+          delay={0.6}
+          stagger={0.05}
+        />
       </div>
     );
   }
 
   if (worldTiles.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <Map className="w-16 h-16 text-muted-foreground animate-pulse" />
-        <h2 className="text-2xl font-bold">Loading World...</h2>
-        <p className="text-muted-foreground">Generating your virtual world</p>
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 bg-card/50 backdrop-blur-sm rounded-lg border border-white/10 p-8">
+        <LoadingAnimation size={80} color="#3b82f6" />
+        <SplitText 
+          text="Loading World..." 
+          animationType="scale"
+          className="text-2xl font-bold"
+          delay={0.2}
+        />
+        <SplitText 
+          text="Generating your virtual world" 
+          animationType="fadeUp"
+          className="text-muted-foreground"
+          delay={0.5}
+        />
       </div>
     );
   }
@@ -403,7 +425,7 @@ export default function WorldBuilder() {
     <div className="space-y-6">
       {/* Header Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-card p-4 rounded-lg border">
+        <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
           <div className="flex items-center gap-2">
             <Map className="w-4 h-4 text-blue-500" />
             <span className="text-sm font-medium">Land Owned</span>
@@ -411,7 +433,7 @@ export default function WorldBuilder() {
           <div className="text-2xl font-bold">{playerStats.totalLand}</div>
         </div>
         
-        <div className="bg-card p-4 rounded-lg border">
+        <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
           <div className="flex items-center gap-2">
             <Home className="w-4 h-4 text-green-500" />
             <span className="text-sm font-medium">Buildings</span>
@@ -419,7 +441,7 @@ export default function WorldBuilder() {
           <div className="text-2xl font-bold">{playerStats.totalBuildings}</div>
         </div>
         
-        <div className="bg-card p-4 rounded-lg border">
+        <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
           <div className="flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-yellow-500" />
             <span className="text-sm font-medium">Daily Income</span>
@@ -427,7 +449,7 @@ export default function WorldBuilder() {
           <div className="text-2xl font-bold">${playerStats.dailyIncome.toFixed(2)}</div>
         </div>
         
-        <div className="bg-card p-4 rounded-lg border">
+        <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
           <div className="flex items-center gap-2">
             <Trophy className="w-4 h-4 text-purple-500" />
             <span className="text-sm font-medium">Rank</span>
@@ -460,9 +482,14 @@ export default function WorldBuilder() {
       </div>
 
       {/* World Map */}
-      <div className="bg-card p-6 rounded-lg border">
+      <div className="bg-card/80 backdrop-blur-sm p-6 rounded-lg border border-white/10">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">World Map</h3>
+          <SplitText 
+            text="World Map" 
+            animationType="fadeUp"
+            className="text-lg font-semibold"
+            delay={0.1}
+          />
           <div className="flex gap-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 bg-gray-300 rounded"></div>
@@ -479,7 +506,7 @@ export default function WorldBuilder() {
           </div>
         </div>
         
-        <div className="overflow-auto max-h-96 border rounded-lg bg-gray-50 p-4">
+        <div className="overflow-auto max-h-96 border border-white/20 rounded-lg bg-gray-50/50 backdrop-blur-sm p-4">
           <div 
             className="grid gap-1 mx-auto"
             style={{ 
@@ -488,19 +515,13 @@ export default function WorldBuilder() {
             }}
           >
             {worldTiles.map((tile) => (
-              <button
+              <AnimatedTile
                 key={tile.id}
+                tile={tile}
+                isSelected={selectedTile?.id === tile.id}
                 onClick={() => handleTileClick(tile)}
-                className={`
-                  w-10 h-10 border rounded flex items-center justify-center text-xs
-                  hover:ring-2 hover:ring-blue-500 transition-all
-                  ${selectedTile?.id === tile.id ? 'ring-2 ring-blue-500' : ''}
-                `}
-                style={{ backgroundColor: getTileColor(tile) }}
-                title={`Tile (${tile.x}, ${tile.y}) - ${tile.owner ? 'Owned' : 'Available'}`}
-              >
-                {getBuildingIcon(tile.building)}
-              </button>
+                accountAddress={account.address}
+              />
             ))}
           </div>
         </div>
@@ -513,25 +534,6 @@ export default function WorldBuilder() {
           
           {!selectedTile.owner ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4 text-blue-500" />
-                <span className="text-sm">This land is available for purchase</span>
-              </div>
-              
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="text-sm text-blue-800">
-                  <strong>Account Status:</strong>
-                </div>
-                <ul className="text-xs text-blue-700 mt-1 space-y-1">
-                  <li>• Sub Account: {account.address?.slice(0, 6)}...{account.address?.slice(-4)} ({subAccountBalance?.formatted || "0"} ETH)</li>
-                  <li>• Universal Account: {universalAccount?.slice(0, 6)}...{universalAccount?.slice(-4)} ({universalBalance?.formatted || "0"} ETH)</li>
-                   <li>• {subAccountBalance?.value === 0n ? "Will use Universal Account funds via Spend Permissions" : "Using Sub Account funds"}</li>
-                   <li>• Current Chain ID: {account.chainId} ({account.chainId === 8453 ? "Base Mainnet ✅" : "Base Sepolia ❌"})</li>
-                   <li>• ⚠️ Spend Permissions may expire after first transaction</li>
-                   <li>• Check console for permission status before each transaction</li>
-                </ul>
-              </div>
-              
               {account.chainId !== 8453 && (
                 <Button 
                   onClick={() => switchChain({ chainId: 8453 })}
@@ -542,13 +544,14 @@ export default function WorldBuilder() {
                 </Button>
               )}
               
-              <Button 
+              <RippleButton 
                 onClick={handlePurchaseLand}
                 disabled={isBuilding || isPending || isConfirming}
                 className="w-full"
+                animationType="glow"
               >
                  {isBuilding ? "Purchasing..." : `Buy Land for 0.000001 ETH`}
-              </Button>
+              </RippleButton>
             </div>
           ) : selectedTile.owner === account.address ? (
             <div className="space-y-4">
@@ -561,38 +564,44 @@ export default function WorldBuilder() {
                 <div className="space-y-3">
                   <h4 className="font-medium">Build something:</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <Button 
+                    <AnimatedButton 
                       variant="outline" 
                       onClick={() => handleBuild('house')}
                       disabled={isBuilding || isPending || isConfirming}
                       className="flex flex-col items-center gap-2 h-auto p-4"
+                      animationType="bounce"
+                      hoverEffect={true}
                     >
                       <Home className="w-5 h-5" />
                       <span>House</span>
                       <span className="text-xs text-muted-foreground">${BUILDING_PRICES.house}</span>
-                    </Button>
+                    </AnimatedButton>
                     
-                    <Button 
+                    <AnimatedButton 
                       variant="outline" 
                       onClick={() => handleBuild('shop')}
                       disabled={isBuilding || isPending || isConfirming}
                       className="flex flex-col items-center gap-2 h-auto p-4"
+                      animationType="pulse"
+                      hoverEffect={true}
                     >
                       <Store className="w-5 h-5" />
                       <span>Shop</span>
                       <span className="text-xs text-muted-foreground">${BUILDING_PRICES.shop}</span>
-                    </Button>
+                    </AnimatedButton>
                     
-                    <Button 
+                    <AnimatedButton 
                       variant="outline" 
                       onClick={() => handleBuild('attraction')}
                       disabled={isBuilding || isPending || isConfirming}
                       className="flex flex-col items-center gap-2 h-auto p-4"
+                      animationType="glow"
+                      hoverEffect={true}
                     >
                       <Mountain className="w-5 h-5" />
                       <span>Attraction</span>
                       <span className="text-xs text-muted-foreground">${BUILDING_PRICES.attraction}</span>
-                    </Button>
+                    </AnimatedButton>
                   </div>
                 </div>
               ) : (

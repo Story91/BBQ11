@@ -1,10 +1,10 @@
 import { cookieStorage, createConfig, createStorage, http } from "wagmi";
-import { base, baseSepolia } from "wagmi/chains";
+import { base } from "wagmi/chains";
 import { baseAccount } from "wagmi/connectors";
 
 export function getConfig() {
   return createConfig({
-    chains: [baseSepolia, base], // Base Sepolia first for testing, then Mainnet as fallback
+    chains: [base], // Only Base Mainnet
     connectors: [
       baseAccount({
         appName: "World Builder",
@@ -13,10 +13,7 @@ export function getConfig() {
           defaultAccount: "sub",
         },
         paymasterUrls: {
-          [base.id]: process.env
-            .NEXT_PUBLIC_PAYMASTER_SERVICE_URL as string,
-          [baseSepolia.id]: process.env
-            .NEXT_PUBLIC_PAYMASTER_SERVICE_URL as string,
+          [base.id]: "https://api.developer.coinbase.com/rpc/v1/base/oMc2GB9cTF7I8zaD11NHTuIVDxECmWz1",
         },
       }),
     ],
@@ -26,7 +23,6 @@ export function getConfig() {
     ssr: true,
     transports: {
       [base.id]: http(),
-      [baseSepolia.id]: http(),
     },
   });
 }
