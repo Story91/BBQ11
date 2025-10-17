@@ -21,20 +21,24 @@ import AnimatedTile from "./animations/AnimatedTile";
 import SplitText from "./animations/SplitText";
 import LoadingAnimation from "./animations/LoadingAnimation";
 import AnimatedButton, { RippleButton } from "./animations/AnimatedButton";
+import CountUp from "./animations/CountUp";
 
 interface Tile {
   id: string;
   x: number;
   y: number;
   owner: string | null;
-  building: 'empty' | 'house' | 'shop' | 'attraction';
+  building: 'empty' | 'house' | 'shop' | 'attraction' | 'factory' | 'headquarters';
   income: number;
   lastHarvest: number;
+  wbIncome: number; // WB tokens per second
 }
 
 interface PlayerStats {
   totalLand: number;
   totalEarnings: number;
+  totalWB: number;
+  wbPerSecond: number;
   rank: number;
 }
 
@@ -42,14 +46,25 @@ const WORLD_SIZE = 20;
 const TILE_SIZE = 50;
 const LAND_PRICE = 0.000001; // 0.000001 ETH (1 gwei)
 const BUILDING_PRICES = {
-  house: 0.005, // 0.005 ETH
-  shop: 0.02,   // 0.02 ETH  
-  attraction: 0.05 // 0.05 ETH
+  house: 0.0000001, // 0.0000001 ETH
+  shop: 0.0000002,   // 0.0000002 ETH  
+  attraction: 0.0000003, // 0.0000003 ETH
+  factory: 0.0000004, // 0.0000004 ETH
+  headquarters: 0.0000005 // 0.0000005 ETH
 };
 const BUILDING_INCOME = {
-  house: 0.01,
-  shop: 0.03,
-  attraction: 0.1
+  house: 0.0001,
+  shop: 0.0003,
+  attraction: 0.001,
+  factory: 0.005,
+  headquarters: 0.01
+};
+const BUILDING_WB_INCOME = {
+  house: 0.00001, // 0.00001 WB per second
+  shop: 0.00002,
+  attraction: 0.00003,
+  factory: 0.00004,
+  headquarters: 0.00005
 };
 
 export default function WorldBuilder() {
@@ -62,6 +77,8 @@ export default function WorldBuilder() {
   const [playerStats, setPlayerStats] = useState<PlayerStats>({
     totalLand: 0,
     totalEarnings: 0,
+    totalWB: 0,
+    wbPerSecond: 0,
     rank: 1
   });
 
@@ -159,18 +176,49 @@ export default function WorldBuilder() {
         const isOwned = (seed * 7) % 10 === 0; // 10% owned
         const hasBuilding = (seed * 3) % 20 === 0; // 5% with buildings
         
+        const buildingType = hasBuilding ? 
+          (['house', 'shop', 'attraction', 'factory', 'headquarters'][seed % 5] as 'house' | 'shop' | 'attraction' | 'factory' | 'headquarters') : 
+          'empty';
+        
         tiles.push({
           id: `${x}-${y}`,
           x,
           y,
           owner: isOwned ? `0x${seed.toString(16).padStart(40, '0')}` : null,
-          building: hasBuilding ? 'house' : 'empty',
-          income: 0,
+          building: buildingType,
+          income: hasBuilding && buildingType !== 'empty' ? BUILDING_INCOME[buildingType] : 0,
+          wbIncome: hasBuilding && buildingType !== 'empty' ? BUILDING_WB_INCOME[buildingType] : 0,
           lastHarvest: Date.now()
         });
       }
     }
     setWorldTiles(tiles);
+  }, []);
+
+  // Mock WB tokens for testing - give player some initial WB
+  useEffect(() => {
+    if (account.address) {
+      setPlayerStats(prev => ({
+        ...prev,
+        totalWB: 0.5, // Mock initial WB tokens
+        wbPerSecond: 0.00001 // Mock WB per second
+      }));
+    }
+  }, [account.address]);
+
+  // WB Token Streaming Effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlayerStats(prev => {
+        const newWB = prev.totalWB + (prev.wbPerSecond / 10); // Update 10 times per second
+        return {
+          ...prev,
+          totalWB: newWB
+        };
+      });
+    }, 100); // Update every 100ms for smooth animation
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleTileClick = useCallback((tile: Tile) => {
@@ -257,7 +305,7 @@ export default function WorldBuilder() {
     }
   }, [selectedTile, account.address, balance, sendTransaction]);
 
-  const handleBuild = useCallback(async (buildingType: 'house' | 'shop' | 'attraction') => {
+  const handleBuild = useCallback(async (buildingType: 'house' | 'shop' | 'attraction' | 'factory' | 'headquarters') => {
     if (!selectedTile || !account.address) return;
     
     if (!selectedTile.owner || selectedTile.owner !== account.address) {
@@ -275,7 +323,7 @@ export default function WorldBuilder() {
     }
 
     const price = BUILDING_PRICES[buildingType];
-    if (!balance || balance.value < parseUnits(price.toString(), 18)) { // ETH has 18 decimals
+    if (!balance || balance.value < parseUnits(price.toFixed(18), 18)) { // ETH has 18 decimals
       toast.error("Insufficient balance", {
         description: `You need at least ${price} ETH to build a ${buildingType}`,
       });
@@ -285,10 +333,13 @@ export default function WorldBuilder() {
     try {
       setIsBuilding(true);
       
+      // Store building type for later use
+      setSelectedTile(prev => prev ? { ...prev, building: buildingType } : null);
+      
       // Create a mock transaction for building
       const mockRecipient = "0xF1fa20027b6202bc18e4454149C85CB01dC91Dfd"; // Use same recipient as land purchase
       
-      const ethAmount = parseUnits(price.toString(), 18); // ETH has 18 decimals
+      const ethAmount = parseUnits(price.toFixed(18), 18); // ETH has 18 decimals
 
       console.log("Building:", {
         tile: selectedTile.id,
@@ -318,8 +369,11 @@ export default function WorldBuilder() {
   // Handle transaction success and errors
   useEffect(() => {
     if (isConfirmed && selectedTile) {
+      const wasLandPurchase = !selectedTile.owner;
+      const wasBuildingConstruction = selectedTile.owner === account.address;
+      
       toast.success("Transaction successful!", {
-        description: selectedTile.owner ? "Building constructed!" : "Land purchased!",
+        description: wasLandPurchase ? "Land purchased!" : "Building constructed!",
       });
 
       // Update the tile
@@ -327,19 +381,30 @@ export default function WorldBuilder() {
         tile.id === selectedTile.id 
           ? {
               ...tile,
-              owner: tile.owner || account.address || null,
-              building: tile.owner ? (selectedTile.building || 'house') : tile.building
+              owner: wasLandPurchase ? (account.address || null) : tile.owner,
+              building: wasBuildingConstruction ? selectedTile.building : tile.building,
+              income: wasBuildingConstruction && selectedTile.building !== 'empty' ? BUILDING_INCOME[selectedTile.building] : tile.income,
+              wbIncome: wasBuildingConstruction && selectedTile.building !== 'empty' ? BUILDING_WB_INCOME[selectedTile.building] : tile.wbIncome
             }
           : tile
       ));
 
+      // Update selectedTile to reflect the changes
+      setSelectedTile(prev => prev ? {
+        ...prev,
+        owner: wasLandPurchase ? (account.address || null) : prev.owner,
+        building: wasBuildingConstruction ? prev.building : prev.building,
+        income: wasBuildingConstruction && prev.building !== 'empty' ? BUILDING_INCOME[prev.building] : prev.income,
+        wbIncome: wasBuildingConstruction && prev.building !== 'empty' ? BUILDING_WB_INCOME[prev.building] : prev.wbIncome
+      } : null);
+
       // Update player stats
       setPlayerStats(prev => ({
         ...prev,
-        totalLand: prev.totalLand + (selectedTile.owner ? 0 : 1)
+        totalLand: prev.totalLand + (wasLandPurchase ? 1 : 0)
       }));
 
-      setSelectedTile(null);
+      // Don't reset selectedTile after successful transaction - keep it selected for building
       setIsBuilding(false);
       reset();
     }
@@ -359,8 +424,8 @@ export default function WorldBuilder() {
   }, [hash, isPending, isConfirming, isConfirmed, reset]);
 
   const getTileColor = (tile: Tile) => {
-    if (!tile.owner) return '#f3f4f6'; // Gray for unowned
-    if (tile.owner === account.address) return '#10b981'; // Green for owned by user
+    if (!tile.owner) return '#1e293b'; // Dark slate for unowned (Base @Web style)
+    if (tile.owner === account.address) return '#3b82f6'; // Blue for owned by user
     return '#f59e0b'; // Orange for owned by others
   };
 
@@ -384,7 +449,7 @@ export default function WorldBuilder() {
           delay={0.3}
         />
         <SplitText 
-          text="Connect your wallet to start building your virtual world. Buy land, construct buildings, and earn income from tourists!" 
+          text="Build your virtual empire on Base! Each land tile represents 1 hour of MiniApp development lessons. Earn WB tokens by building structures and unlock advanced courses when you reach 100,000 WB tokens!" 
           animationType="fadeUp"
           className="text-muted-foreground text-center max-w-md"
           delay={0.6}
@@ -418,55 +483,55 @@ export default function WorldBuilder() {
     <div className="space-y-6 w-full mt-8">
       {/* Stats Section */}
       <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-        {/* Stats and Balance */}
+      {/* Stats and Balance */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
             <div className="flex items-center gap-2 mb-2">
               <MapIcon className="w-5 h-5 text-blue-500" />
-              <span className="text-sm font-medium">Land Owned</span>
-            </div>
-            <div className="text-2xl font-bold">{playerStats.totalLand}</div>
+            <span className="text-sm font-medium">Land Owned</span>
           </div>
-          
+            <div className="text-2xl font-bold">{playerStats.totalLand}</div>
+        </div>
+        
           <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
             <div className="flex items-center gap-2 mb-2">
               <Trophy className="w-5 h-5 text-purple-500" />
-              <span className="text-sm font-medium">Rank</span>
-            </div>
-            <div className="text-2xl font-bold">#{playerStats.rank}</div>
+            <span className="text-sm font-medium">Rank</span>
           </div>
-          
+            <div className="text-2xl font-bold">#{playerStats.rank}</div>
+        </div>
+        
           <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300 relative">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-muted-foreground">Your Balance</div>
-              <div className="flex items-center gap-1">
-                <span className={`text-xs px-1.5 py-0.5 rounded ${showSubAccountBalance ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted-foreground'}`}>
-                  Sub
-                </span>
-                <button
-                  onClick={() => setShowSubAccountBalance(!showSubAccountBalance)}
-                  className="relative inline-flex h-3 w-5 items-center rounded-full bg-gray-200 dark:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <span
-                    className={`inline-block h-2 w-2 transform rounded-full bg-white transition-transform ${
-                      showSubAccountBalance ? 'translate-x-2.5' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${!showSubAccountBalance ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'text-muted-foreground'}`}>
-                  Base
-                </span>
+            <div className="text-sm text-muted-foreground">Your Balance</div>
+            <div className="flex items-center gap-1">
+              <span className={`text-xs px-1.5 py-0.5 rounded ${showSubAccountBalance ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted-foreground'}`}>
+                Sub
+              </span>
+              <button
+                onClick={() => setShowSubAccountBalance(!showSubAccountBalance)}
+                className="relative inline-flex h-3 w-5 items-center rounded-full bg-gray-200 dark:bg-gray-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <span
+                  className={`inline-block h-2 w-2 transform rounded-full bg-white transition-transform ${
+                    showSubAccountBalance ? 'translate-x-2.5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+              <span className={`text-xs px-1.5 py-0.5 rounded ${!showSubAccountBalance ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'text-muted-foreground'}`}>
+                Base
+              </span>
               </div>
             </div>
             <div className="text-2xl font-bold">
               {balance ? `${parseFloat(balance.formatted).toFixed(7)} ETH` : "Loading..."}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {showSubAccountBalance ? (
-                account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Sub Account"
-              ) : (
-                universalAccount ? `${universalAccount.slice(0, 6)}...${universalAccount.slice(-4)}` : "Base Account"
-              )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {showSubAccountBalance ? (
+              account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Sub Account"
+            ) : (
+              universalAccount ? `${universalAccount.slice(0, 6)}...${universalAccount.slice(-4)}` : "Base Account"
+            )}
             </div>
             {showSubAccountBalance && (
               <SubAccountManager>
@@ -480,9 +545,17 @@ export default function WorldBuilder() {
           <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-5 h-5 text-green-500" />
-              <span className="text-sm font-medium">Total Earnings</span>
+              <span className="text-sm font-medium">WB Tokens</span>
             </div>
-            <div className="text-2xl font-bold">{playerStats.totalEarnings.toFixed(4)} ETH</div>
+            <div className="text-2xl font-bold text-green-500">
+              {playerStats.totalWB.toFixed(6)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              +{playerStats.wbPerSecond.toFixed(5)} WB/sec
+            </div>
+            <div className="text-xs text-blue-500 mt-1">
+              Goal: 100,000 WB for advanced courses
+            </div>
           </div>
         </div>
       </div>
@@ -494,7 +567,7 @@ export default function WorldBuilder() {
             <h3 className="text-lg font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
               Selected Tile
             </h3>
-            <p className="text-sm text-muted-foreground">Choose your next land purchase</p>
+            <p className="text-sm text-muted-foreground">Each tile = 1 hour of MiniApp lessons</p>
           </div>
           <div className="text-right">
             <div className="text-sm text-muted-foreground">Land Price</div>
@@ -515,8 +588,8 @@ export default function WorldBuilder() {
             <div className="font-medium">
               {selectedTile ? (
                 selectedTile.owner ? 
-                  (selectedTile.owner === account.address ? "Your land" : "Owned by others") : 
-                  "Available for purchase"
+              (selectedTile.owner === account.address ? "Your land" : "Owned by others") : 
+              "Available for purchase"
               ) : "No tile selected"}
             </div>
           </div>
@@ -547,6 +620,122 @@ export default function WorldBuilder() {
         )}
       </div>
 
+      {/* Building Options - Only for owned land */}
+      {selectedTile && selectedTile.owner === account.address && (
+        <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+              <Info className="w-4 h-4 text-white" />
+            </div>
+            <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Building Options</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+              <Info className="w-4 h-4" />
+              <span className="font-medium">This is your land - Build something!</span>
+            </div>
+            
+            {selectedTile.building === 'empty' ? (
+              <div className="space-y-4">
+                <h4 className="font-semibold text-lg">Available Buildings:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  <AnimatedButton 
+                    variant="outline" 
+                    onClick={() => handleBuild('house')}
+                    disabled={isBuilding || isPending || isConfirming}
+                    className="flex flex-col items-center gap-2 h-auto p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-500/30"
+                    animationType="bounce"
+                    hoverEffect={true}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                      <Mountain className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm">House</span>
+                    <span className="text-xs text-muted-foreground">{BUILDING_PRICES.house.toFixed(7)} ETH</span>
+                    <span className="text-xs text-green-500">+{BUILDING_WB_INCOME.house} WB/s</span>
+                  </AnimatedButton>
+                  
+                  <AnimatedButton 
+                    variant="outline" 
+                    onClick={() => handleBuild('shop')}
+                    disabled={isBuilding || isPending || isConfirming}
+                    className="flex flex-col items-center gap-2 h-auto p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 hover:from-green-500/20 hover:to-emerald-500/20 border-green-500/30"
+                    animationType="pulse"
+                    hoverEffect={true}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                      <Mountain className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm">Shop</span>
+                    <span className="text-xs text-muted-foreground">{BUILDING_PRICES.shop.toFixed(7)} ETH</span>
+                    <span className="text-xs text-green-500">+{BUILDING_WB_INCOME.shop} WB/s</span>
+                  </AnimatedButton>
+                  
+                  <AnimatedButton 
+                    variant="outline" 
+                    onClick={() => handleBuild('attraction')}
+                    disabled={isBuilding || isPending || isConfirming}
+                    className="flex flex-col items-center gap-2 h-auto p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 border-purple-500/30"
+                    animationType="glow"
+                    hoverEffect={true}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                      <Mountain className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm">Attraction</span>
+                    <span className="text-xs text-muted-foreground">{BUILDING_PRICES.attraction.toFixed(7)} ETH</span>
+                    <span className="text-xs text-green-500">+{BUILDING_WB_INCOME.attraction} WB/s</span>
+                  </AnimatedButton>
+
+                  <AnimatedButton 
+                    variant="outline" 
+                    onClick={() => handleBuild('factory')}
+                    disabled={isBuilding || isPending || isConfirming}
+                    className="flex flex-col items-center gap-2 h-auto p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 border-orange-500/30"
+                    animationType="bounce"
+                    hoverEffect={true}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                      <Mountain className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm">Factory</span>
+                    <span className="text-xs text-muted-foreground">{BUILDING_PRICES.factory.toFixed(7)} ETH</span>
+                    <span className="text-xs text-green-500">+{BUILDING_WB_INCOME.factory} WB/s</span>
+                  </AnimatedButton>
+
+                  <AnimatedButton 
+                    variant="outline" 
+                    onClick={() => handleBuild('headquarters')}
+                    disabled={isBuilding || isPending || isConfirming}
+                    className="flex flex-col items-center gap-2 h-auto p-4 bg-gradient-to-br from-yellow-500/10 to-amber-500/10 hover:from-yellow-500/20 hover:to-amber-500/20 border-yellow-500/30"
+                    animationType="glow"
+                    hoverEffect={true}
+                  >
+                    <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-lg flex items-center justify-center">
+                      <Mountain className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-sm">HQ</span>
+                    <span className="text-xs text-muted-foreground">{BUILDING_PRICES.headquarters.toFixed(7)} ETH</span>
+                    <span className="text-xs text-green-500">+{BUILDING_WB_INCOME.headquarters} WB/s</span>
+                  </AnimatedButton>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/30">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
+                  <Mountain className="w-5 h-5" />
+                  <span className="font-semibold">Building: {selectedTile.building}</span>
+                </div>
+                <div className="text-sm text-green-600 dark:text-green-400">
+                  Income: {BUILDING_INCOME[selectedTile.building]} ETH/day
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* World Map */}
       <div className="bg-gradient-to-br from-slate-900/50 to-blue-900/30 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <div className="flex items-center justify-between mb-6">
@@ -554,12 +743,12 @@ export default function WorldBuilder() {
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <MapIcon className="w-4 h-4 text-white" />
             </div>
-            <SplitText 
-              text="World Map" 
-              animationType="fadeUp"
+          <SplitText 
+            text="World Map" 
+            animationType="fadeUp"
               className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
-              delay={0.1}
-            />
+            delay={0.1}
+          />
           </div>
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
@@ -599,108 +788,6 @@ export default function WorldBuilder() {
         </div>
       </div>
 
-      {/* Action Panel */}
-      {selectedTile && (
-        <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-              <Info className="w-4 h-4 text-white" />
-            </div>
-            <h3 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Tile Actions</h3>
-          </div>
-          
-          {selectedTile.owner === account.address ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                <Info className="w-4 h-4" />
-                <span className="font-medium">This is your land - Build something!</span>
-              </div>
-              
-              {selectedTile.building === 'empty' ? (
-                <div className="space-y-4">
-                  <h4 className="font-semibold text-lg">Available Buildings:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <AnimatedButton 
-                      variant="outline" 
-                      onClick={() => handleBuild('house')}
-                      disabled={isBuilding || isPending || isConfirming}
-                      className="flex flex-col items-center gap-3 h-auto p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border-blue-500/30"
-                      animationType="bounce"
-                      hoverEffect={true}
-                    >
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <Mountain className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="font-semibold">House</span>
-                      <span className="text-sm text-muted-foreground">{BUILDING_PRICES.house} ETH</span>
-                    </AnimatedButton>
-                    
-                    <AnimatedButton 
-                      variant="outline" 
-                      onClick={() => handleBuild('shop')}
-                      disabled={isBuilding || isPending || isConfirming}
-                      className="flex flex-col items-center gap-3 h-auto p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 hover:from-green-500/20 hover:to-emerald-500/20 border-green-500/30"
-                      animationType="pulse"
-                      hoverEffect={true}
-                    >
-                      <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                        <Mountain className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="font-semibold">Shop</span>
-                      <span className="text-sm text-muted-foreground">{BUILDING_PRICES.shop} ETH</span>
-                    </AnimatedButton>
-                    
-                    <AnimatedButton 
-                      variant="outline" 
-                      onClick={() => handleBuild('attraction')}
-                      disabled={isBuilding || isPending || isConfirming}
-                      className="flex flex-col items-center gap-3 h-auto p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 border-purple-500/30"
-                      animationType="glow"
-                      hoverEffect={true}
-                    >
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                        <Mountain className="w-6 h-6 text-white" />
-                      </div>
-                      <span className="font-semibold">Attraction</span>
-                      <span className="text-sm text-muted-foreground">{BUILDING_PRICES.attraction} ETH</span>
-                    </AnimatedButton>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-green-500/10 rounded-lg p-4 border border-green-500/30">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300 mb-2">
-                    <Mountain className="w-5 h-5" />
-                    <span className="font-semibold">Building: {selectedTile.building}</span>
-                  </div>
-                  <div className="text-sm text-green-600 dark:text-green-400">
-                    Income: {BUILDING_INCOME[selectedTile.building]} ETH/day
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : selectedTile.owner ? (
-            <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/30">
-              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                <Info className="w-4 h-4" />
-                <span className="font-medium">This land is owned by another player</span>
-              </div>
-              <div className="text-sm text-orange-600 dark:text-orange-400 mt-1">
-                Select an available tile to purchase.
-              </div>
-            </div>
-          ) : (
-            <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/30">
-              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                <Info className="w-4 h-4" />
-                <span className="font-medium">Available for purchase!</span>
-              </div>
-              <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                Use the "Buy Land" button above to purchase this tile.
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

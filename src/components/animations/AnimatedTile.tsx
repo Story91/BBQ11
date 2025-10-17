@@ -10,9 +10,10 @@ interface AnimatedTileProps {
     x: number;
     y: number;
     owner: string | null;
-    building: 'empty' | 'house' | 'shop' | 'attraction';
+    building: 'empty' | 'house' | 'shop' | 'attraction' | 'factory' | 'headquarters';
     income: number;
     lastHarvest: number;
+    wbIncome: number;
   };
   isSelected: boolean;
   onClick: () => void;
@@ -112,8 +113,8 @@ export default function AnimatedTile({
   }, [isHovered]);
 
   const getTileColor = () => {
-    if (!tile.owner) return '#f3f4f6'; // Gray for unowned
-    if (tile.owner === accountAddress) return '#10b981'; // Green for owned by user
+    if (!tile.owner) return '#1e293b'; // Dark slate for unowned (Base @Web style)
+    if (tile.owner === accountAddress) return '#3b82f6'; // Blue for owned by user
     return '#f59e0b'; // Orange for owned by others
   };
 
@@ -163,7 +164,7 @@ export default function AnimatedTile({
         <div 
           className="absolute inset-0 rounded opacity-20 blur-sm"
           style={{ 
-            backgroundColor: tile.owner === accountAddress ? '#10b981' : '#f59e0b',
+            backgroundColor: tile.owner === accountAddress ? '#3b82f6' : '#f59e0b',
             animation: 'pulse 2s infinite'
           }}
         />
