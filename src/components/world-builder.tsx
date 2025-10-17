@@ -61,6 +61,7 @@ export default function WorldBuilder() {
   const { switchChain } = useSwitchChain();
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
   const [isBuilding, setIsBuilding] = useState(false);
+  const [showSubAccountBalance, setShowSubAccountBalance] = useState(true);
   const [playerStats, setPlayerStats] = useState<PlayerStats>({
     totalLand: 0,
     totalBuildings: 0,
@@ -82,10 +83,8 @@ export default function WorldBuilder() {
     query: { enabled: !!universalAccount },
   });
   
-  // Use the balance that has funds
-  const balance = subAccountBalance?.value && subAccountBalance.value > 0n 
-    ? subAccountBalance 
-    : universalBalance;
+  // Use the balance based on toggle selection
+  const balance = showSubAccountBalance ? subAccountBalance : universalBalance;
 
   // Transaction handling
   const { sendTransaction, data: hash, isPending, reset } = useSendTransaction();
@@ -461,9 +460,36 @@ export default function WorldBuilder() {
       {/* Balance and Controls */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="bg-card p-4 rounded-lg border">
-          <div className="text-sm text-muted-foreground">Your Balance</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-muted-foreground">Your Balance</div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-1 rounded ${showSubAccountBalance ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted-foreground'}`}>
+                Sub
+              </span>
+              <button
+                onClick={() => setShowSubAccountBalance(!showSubAccountBalance)}
+                className="relative inline-flex h-4 w-7 items-center rounded-full bg-gray-200 dark:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                    showSubAccountBalance ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+              <span className={`text-xs px-2 py-1 rounded ${!showSubAccountBalance ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'text-muted-foreground'}`}>
+                Base
+              </span>
+            </div>
+          </div>
           <div className="text-xl font-bold">
             {balance ? `${balance.formatted} ETH` : "Loading..."}
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {showSubAccountBalance ? (
+              account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : "Sub Account"
+            ) : (
+              universalAccount ? `${universalAccount.slice(0, 6)}...${universalAccount.slice(-4)}` : "Base Account"
+            )}
           </div>
         </div>
         

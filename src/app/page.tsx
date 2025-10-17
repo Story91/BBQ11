@@ -9,6 +9,7 @@ import {
   useConnections,
 } from "wagmi";
 import WorldBuilder from "../components/world-builder";
+import SubAccountManager from "../components/SubAccountManager";
 import { useMemo, useState } from "react";
 import SplitText from "../components/animations/SplitText";
 import TargetCursor from "../components/animations/TargetCursor";
@@ -16,6 +17,7 @@ import AuroraBackground from "../components/animations/AuroraBackground";
 import ParallaxCard, { FloatingElement } from "../components/animations/ParallaxCard";
 import ParticleSystem from "../components/animations/ParticleSystem";
 import SplashScreen from "../components/animations/SplashScreen";
+import { Wallet } from "lucide-react";
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -73,7 +75,7 @@ function App() {
             <div className="flex items-center gap-2 text-muted-foreground">
               <div className="flex flex-col items-end gap-0.5">
                 <span className="text-xs text-muted-foreground">
-                  Universal: {universalAccount?.slice(0, 6)}...
+                  Base: {universalAccount?.slice(0, 6)}...
                   {universalAccount?.slice(-4)}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -81,6 +83,13 @@ function App() {
                   ETH)
                 </span>
               </div>
+
+              <SubAccountManager>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Accounts
+                </Button>
+              </SubAccountManager>
 
               <Button variant="outline" onClick={() => disconnect()} size="sm">
                 Disconnect
