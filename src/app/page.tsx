@@ -17,7 +17,7 @@ import AuroraBackground from "../components/animations/AuroraBackground";
 import ParallaxCard, { FloatingElement } from "../components/animations/ParallaxCard";
 import ParticleSystem from "../components/animations/ParticleSystem";
 import SplashScreen from "../components/animations/SplashScreen";
-import { Wallet } from "lucide-react";
+import { Wallet, Map as MapIcon } from "lucide-react";
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -59,18 +59,19 @@ function App() {
         hideDefaultCursor={true}
       />
       <main className="flex min-h-screen flex-col items-center justify-between px-4 pb-4 md:pb-8 md:px-8 relative z-10">
-        <div className="w-full max-w-2xl mx-auto">
+        <div className="w-full max-w-7xl mx-auto">
           <nav className="flex justify-between items-center sticky top-0 bg-background/80 backdrop-blur-md z-20 py-4 rounded-lg border border-white/10">
-            <ParallaxCard intensity={0.05} className="flex items-center gap-3">
-              <FloatingElement duration={4} intensity={5}>
-                <SplitText 
-                  text="🌍 World Builder" 
-                  animationType="bounce"
-                  className="text-2xl font-bold"
-                  delay={0.2}
-                />
-              </FloatingElement>
-            </ParallaxCard>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <MapIcon className="w-4 h-4 text-white" />
+              </div>
+              <SplitText 
+                text="🌍 World Builder" 
+                animationType="bounce"
+                className="text-xl font-bold"
+                delay={0.2}
+              />
+            </div>
           {account.status === "connected" ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <div className="flex flex-col items-end gap-0.5">
