@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { USDC, erc20Abi } from "@/lib/usdc";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ExternalLink, Heart, Repeat2, Send, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { encodeFunctionData, formatUnits, isAddress, parseUnits } from "viem";
 import {
@@ -21,6 +21,7 @@ import {
   useBalance,
   useSendTransaction,
   useWaitForTransactionReceipt,
+  useConnections,
 } from "wagmi";
 import { formatDate } from "../lib/utils";
 
@@ -206,10 +207,32 @@ function PostCard({
   setTippingPostId: (id: string | null) => void;
 }) {
   const account = useAccount();
-  const { data: balance } = useBalance({
+  const connections = useConnections();
+  
+  // Get both Sub Account and Universal Account
+  const [_subAccount, universalAccount] = useMemo(() => {
+    return connections.flatMap((connection) => connection.accounts);
+  }, [connections]);
+  
+  // Check Sub Account balance (current account)
+  const { data: subAccountBalance } = useBalance({
     address: account.address,
     token: USDC.address,
   });
+  
+  // Check Universal Account balance (parent account with funds)
+  const { data: universalBalance } = useBalance({
+    address: universalAccount,
+    token: USDC.address,
+    query: {
+      enabled: !!universalAccount,
+    },
+  });
+  
+  // Use the balance that has funds (prefer sub account, fallback to universal)
+  const balance = subAccountBalance?.value && subAccountBalance.value > 0n 
+    ? subAccountBalance 
+    : universalBalance;
   const [toastId, setToastId] = useState<string | number | null>(null);
   const [customTipAmount, setCustomTipAmount] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -218,48 +241,127 @@ function PostCard({
   const isThisPostTipping = tippingPostId === post.id;
 
   const handleTip = useCallback(async () => {
-    setTippingPostId(post.id);
+    try {
+      setTippingPostId(post.id);
 
-    const data = encodeFunctionData({
-      abi: erc20Abi,
-      functionName: "transfer",
-      args: [
-        post.author.verified_addresses.eth_addresses[0],
-        parseUnits("0.10", USDC.decimals),
-      ],
-    });
+      // Validate recipient address
+      const recipientAddress = post.author.verified_addresses.eth_addresses[0];
+      if (!isAddress(recipientAddress)) {
+        toast.error("Invalid recipient address", {
+          description: "The recipient address is not valid",
+        });
+        setTippingPostId(null);
+        return;
+      }
 
-    sendTransaction({
-      to: USDC.address,
-      data,
-      value: 0n,
-    });
+      // Check if user has sufficient balance
+      if (!balance || balance.value < parseUnits("0.10", USDC.decimals)) {
+        const hasUniversalBalance = universalBalance && universalBalance.value >= parseUnits("0.10", USDC.decimals);
+        
+        if (hasUniversalBalance) {
+          toast.error("Sub Account needs funds", {
+            description: "Your Universal Account has funds, but Spend Permissions may not be configured. Try funding your Sub Account first.",
+          });
+        } else {
+          toast.error("Insufficient balance", {
+            description: "You need at least 0.10 USDC to send a tip",
+          });
+        }
+        setTippingPostId(null);
+        return;
+      }
 
-    const toastId_ = toast("Sending tip...", {
-      description: `Tipping @${post.author.username} with 0.10 USDC`,
-      duration: Infinity,
-    });
+      const data = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [recipientAddress, parseUnits("0.10", USDC.decimals)],
+      });
 
-    setToastId(toastId_);
-  }, [post.author, post.id, sendTransaction, setTippingPostId]);
+      console.log("Sending tip transaction:", {
+        to: USDC.address,
+        data,
+        recipientAddress,
+        amount: "0.10",
+      });
+
+      sendTransaction({
+        to: USDC.address,
+        data,
+        value: 0n,
+      });
+
+      const toastId_ = toast("Sending tip...", {
+        description: `Tipping @${post.author.username} with 0.10 USDC`,
+        duration: Infinity,
+      });
+
+      setToastId(toastId_);
+    } catch (error) {
+      console.error("Error sending tip:", error);
+      toast.error("Failed to send tip", {
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+      });
+      setTippingPostId(null);
+    }
+  }, [post.author, post.id, sendTransaction, setTippingPostId, balance]);
 
   const handleCustomTip = useCallback(async () => {
-    if (
-      !customTipAmount ||
-      !isAddress(post.author.verified_addresses.eth_addresses[0])
-    )
-      return;
-
     try {
+      // Validate inputs
+      if (!customTipAmount) {
+        toast.error("Please enter a tip amount", {
+          description: "Amount cannot be empty",
+        });
+        return;
+      }
+
+      const recipientAddress = post.author.verified_addresses.eth_addresses[0];
+      if (!isAddress(recipientAddress)) {
+        toast.error("Invalid recipient address", {
+          description: "The recipient address is not valid",
+        });
+        return;
+      }
+
+      // Parse and validate amount
+      const tipAmount = parseFloat(customTipAmount);
+      if (isNaN(tipAmount) || tipAmount <= 0) {
+        toast.error("Invalid tip amount", {
+          description: "Please enter a valid positive number",
+        });
+        return;
+      }
+
+      // Check balance
+      const tipAmountWei = parseUnits(customTipAmount, USDC.decimals);
+      if (!balance || balance.value < tipAmountWei) {
+        const hasUniversalBalance = universalBalance && universalBalance.value >= tipAmountWei;
+        
+        if (hasUniversalBalance) {
+          toast.error("Sub Account needs funds", {
+            description: `Your Universal Account has ${universalBalance.formatted} USDC, but Spend Permissions may not be configured. Try funding your Sub Account first.`,
+          });
+        } else {
+          toast.error("Insufficient balance", {
+            description: `You need at least ${customTipAmount} USDC to send this tip`,
+          });
+        }
+        return;
+      }
+
       setTippingPostId(post.id);
 
       const data = encodeFunctionData({
         abi: erc20Abi,
         functionName: "transfer",
-        args: [
-          post.author.verified_addresses.eth_addresses[0],
-          parseUnits(customTipAmount, USDC.decimals),
-        ],
+        args: [recipientAddress, tipAmountWei],
+      });
+
+      console.log("Sending custom tip transaction:", {
+        to: USDC.address,
+        data,
+        recipientAddress,
+        amount: customTipAmount,
       });
 
       sendTransaction({
@@ -276,10 +378,12 @@ function PostCard({
       setToastId(toastId_);
       setIsDialogOpen(false);
       setCustomTipAmount("");
-    } catch (_error) {
-      toast.error("Invalid tip amount", {
-        description: "Please enter a valid USDC amount",
+    } catch (error) {
+      console.error("Error sending custom tip:", error);
+      toast.error("Failed to send tip", {
+        description: error instanceof Error ? error.message : "Invalid tip amount",
       });
+      setTippingPostId(null);
     }
   }, [
     customTipAmount,
@@ -287,6 +391,7 @@ function PostCard({
     post.id,
     sendTransaction,
     setTippingPostId,
+    balance,
   ]);
 
   const handlePercentageClick = useCallback(
@@ -425,7 +530,7 @@ function PostCard({
               <div className="space-y-4">
                 <div className="p-4 rounded-lg bg-muted">
                   <div className="text-sm text-muted-foreground">
-                    Your Balance{" "}
+                    Sub Account Balance{" "}
                     <a
                       href="https://faucet.circle.com/"
                       target="_blank"
@@ -436,10 +541,15 @@ function PostCard({
                     </a>
                   </div>
                   <div className="text-xl font-medium">
-                    {balance
-                      ? `${Number(formatUnits(balance.value, USDC.decimals)).toFixed(2)} USDC`
+                    {subAccountBalance
+                      ? `${Number(formatUnits(subAccountBalance.value, USDC.decimals)).toFixed(2)} USDC`
                       : "Loading..."}
                   </div>
+                  {universalBalance && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Universal Account: {Number(formatUnits(universalBalance.value, USDC.decimals)).toFixed(2)} USDC
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <Button

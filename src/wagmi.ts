@@ -1,18 +1,20 @@
 import { cookieStorage, createConfig, createStorage, http } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
 import { baseAccount } from "wagmi/connectors";
 
 export function getConfig() {
   return createConfig({
-    chains: [baseSepolia],
+    chains: [base, baseSepolia], // Base Mainnet first, then Sepolia as fallback
     connectors: [
       baseAccount({
-        appName: "Sub Accounts Demo",
+        appName: "World Builder",
         subAccounts: {
           creation: "on-connect",
           defaultAccount: "sub",
         },
         paymasterUrls: {
+          [base.id]: process.env
+            .NEXT_PUBLIC_PAYMASTER_SERVICE_URL as string,
           [baseSepolia.id]: process.env
             .NEXT_PUBLIC_PAYMASTER_SERVICE_URL as string,
         },
@@ -23,6 +25,7 @@ export function getConfig() {
     }),
     ssr: true,
     transports: {
+      [base.id]: http(),
       [baseSepolia.id]: http(),
     },
   });
