@@ -235,22 +235,8 @@ export default function WorldBuilder() {
       console.log("Universal Account balance:", universalBalance?.formatted);
       console.log("Transaction amount:", formatUnits(ethAmount, 18), "ETH");
       
-       // Check Spend Permissions status before transaction
-       console.log("Checking Spend Permissions status...");
-       
-       // Try to get Spend Permissions info
-       try {
-         const provider = (window as any).ethereum;
-         if (provider) {
-           const permissions = await provider.request({
-             method: 'wallet_getPermissions',
-             params: []
-           });
-           console.log("Current permissions:", permissions);
-         }
-       } catch (error) {
-         console.log("Could not fetch permissions:", error);
-       }
+       // Spend Permissions will be handled automatically by Base Account
+       console.log("Spend Permissions will be handled automatically by Base Account...");
        
        // sendTransaction should automatically use Spend Permissions if Sub Account has insufficient funds
        sendTransaction({

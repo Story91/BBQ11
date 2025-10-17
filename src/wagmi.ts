@@ -4,7 +4,7 @@ import { baseAccount } from "wagmi/connectors";
 
 export function getConfig() {
   return createConfig({
-    chains: [base, baseSepolia], // Base Mainnet first, then Sepolia as fallback
+    chains: [baseSepolia, base], // Base Sepolia first for testing, then Mainnet as fallback
     connectors: [
       baseAccount({
         appName: "World Builder",
