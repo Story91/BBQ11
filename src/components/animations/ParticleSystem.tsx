@@ -35,7 +35,7 @@ export default function ParticleSystem({
       particle.style.backgroundColor = colors[i % colors.length];
       particle.style.left = `${Math.random() * 100}%`;
       particle.style.top = `${Math.random() * 100}%`;
-      particle.style.opacity = Math.random() * 0.5 + 0.2;
+      particle.style.opacity = `${Math.random() * 0.5 + 0.2}`;
       
       container.appendChild(particle);
       particles.push(particle);
