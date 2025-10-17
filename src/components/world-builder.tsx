@@ -415,7 +415,7 @@ export default function WorldBuilder() {
   }
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-6 w-full mt-8">
       {/* Stats Section */}
       <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         {/* Stats and Balance */}
@@ -436,7 +436,7 @@ export default function WorldBuilder() {
             <div className="text-2xl font-bold">#{playerStats.rank}</div>
           </div>
           
-          <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">
+          <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300 relative">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-muted-foreground">Your Balance</div>
               <div className="flex items-center gap-1">
@@ -456,17 +456,10 @@ export default function WorldBuilder() {
                 <span className={`text-xs px-1.5 py-0.5 rounded ${!showSubAccountBalance ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'text-muted-foreground'}`}>
                   Base
                 </span>
-                {showSubAccountBalance && (
-                  <SubAccountManager>
-                    <button className="ml-2 px-2 py-0.5 text-xs rounded bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black transition-colors font-medium">
-                      FUND
-                    </button>
-                  </SubAccountManager>
-                )}
               </div>
             </div>
             <div className="text-2xl font-bold">
-              {balance ? `${balance.formatted} ETH` : "Loading..."}
+              {balance ? `${parseFloat(balance.formatted).toFixed(7)} ETH` : "Loading..."}
             </div>
             <div className="text-xs text-muted-foreground">
               {showSubAccountBalance ? (
@@ -475,6 +468,13 @@ export default function WorldBuilder() {
                 universalAccount ? `${universalAccount.slice(0, 6)}...${universalAccount.slice(-4)}` : "Base Account"
               )}
             </div>
+            {showSubAccountBalance && (
+              <SubAccountManager>
+                <button className="absolute bottom-2 right-2 px-2 py-1 text-xs rounded bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black transition-colors font-medium">
+                  FUND
+                </button>
+              </SubAccountManager>
+            )}
           </div>
           
           <div className="bg-card/80 backdrop-blur-sm p-4 rounded-lg border border-white/10 hover:bg-card/90 transition-all duration-300">

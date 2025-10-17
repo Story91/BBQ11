@@ -17,7 +17,8 @@ import AuroraBackground from "../components/animations/AuroraBackground";
 import ParallaxCard, { FloatingElement } from "../components/animations/ParallaxCard";
 import ParticleSystem from "../components/animations/ParticleSystem";
 import SplashScreen from "../components/animations/SplashScreen";
-import { Wallet, Map as MapIcon } from "lucide-react";
+import { Wallet } from "lucide-react";
+import TrueFocus from "../components/animations/TrueFocus";
 
 function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -53,23 +54,24 @@ function App() {
   return (
     <>
       <AuroraBackground intensity={0.2} speed={0.8} />
-      <ParticleSystem particleCount={15} speed={0.5} size={3} />
+      {/* ParticleSystem disabled to reduce animation conflicts */}
+      {/* <ParticleSystem particleCount={15} speed={0.5} size={3} /> */}
       <TargetCursor 
-        spinDuration={2}
-        hideDefaultCursor={true}
+        spinDuration={3}
+        hideDefaultCursor={false}
       />
       <main className="flex min-h-screen flex-col items-center justify-between px-4 pb-4 md:pb-8 md:px-8 relative z-10">
         <div className="w-full max-w-7xl mx-auto">
           <nav className="flex justify-between items-center sticky top-0 bg-background/80 backdrop-blur-md z-20 py-4 rounded-lg border border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <MapIcon className="w-4 h-4 text-white" />
-              </div>
-              <SplitText 
-                text="🌍 World Builder" 
-                animationType="bounce"
-                className="text-xl font-bold"
-                delay={0.2}
+              <TrueFocus 
+                sentence="WORLD BUILDER"
+                manualMode={false}
+                blurAmount={3}
+                borderColor="#3b82f6"
+                glowColor="rgba(59, 130, 246, 0.6)"
+                animationDuration={0.8}
+                pauseBetweenAnimations={1.5}
               />
             </div>
           {account.status === "connected" ? (
